@@ -4,13 +4,4 @@ body {
   max-width: 1280;
   min-height: 100vh;
   background-color: #f2f7f5;
-  overflow: hidden;
 }
-
-/* #app {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 2rem;
-  font-weight: normal;
-  border: 1px solid black;
-} */
