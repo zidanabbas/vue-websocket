@@ -4,9 +4,9 @@
       <!-- container-banner -->
       <div class="container-banner">
         <div class="list-antrian">
-          <h1 class="title-list">List Antrian</h1>
+          <h1 class="title-list">Nomor Antrian</h1>
           <div class="number-antrian">
-            <span>1</span>
+            <span>{{ queueNumbers.queue }}</span>
           </div>
         </div>
         <div class="frame">
@@ -19,41 +19,114 @@
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             referrerpolicy="strict-origin-when-cross-origin"
             allowfullscreen
+            loading="lazy"
           ></iframe>
         </div>
       </div>
       <!-- end container-banner -->
     </div>
+
     <div class="container">
       <div class="grid-container">
-        <div class="card">
-          <h1 class="title-list">Loket 1</h1>
+        <div class="card" v-for="(number, index) in queueNumbers.lokets" :key="index">
+          <h1 class="title-list">Loket {{ index + 1 }}</h1>
           <div class="card-body">
-            <div class="number-antrian">20</div>
+            <div class="number-antrian">{{ number }}</div>
           </div>
         </div>
-        <div class="card">
-          <h1 class="title-list">Loket 2</h1>
-          <div class="card-body">
-            <div class="number-antrian">20</div>
-          </div>
-        </div>
-        <div class="card">
-          <h1 class="title-list">Loket 3</h1>
-          <div class="card-body">
-            <div class="number-antrian">20</div>
-          </div>
-        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="queue-form">
+        <button @click="registerQueue" class="queue-button">Ambil Nomor Antrian</button>
       </div>
     </div>
   </main>
 </template>
 
 <script>
+import socket from '@/lib/socket'
+import axios from 'axios'
+
 export default {
   data() {
     return {
-      youtubeUrl: 'https://www.youtube.com/embed/RZb2_hxl-Cs?si=UGyBKvdehMOEzNa5&amp;start=6'
+      queueNumbers: {
+        queue: 0,
+        lokets: [0, 0, 0]
+      },
+      youtubeUrl: 'https://www.youtube.com/embed/RZb2_hxl-Cs?si=UGyBKvdehMOEzNa5&amp;start=6',
+      speechVoice: null
+    }
+  },
+  mounted() {
+    socket.on('queue_update', (data) => {
+      this.queueNumbers[data.loket] = data.queueNumber
+    })
+
+    socket.on('loket_empty', (data) => {
+      this.queueNumbers[data.loket] = null
+    })
+
+    window.speechSynthesis.onvoiceschanged = () => {
+      this.getIndonesianFemaleVoice()
+    }
+  },
+  methods: {
+    callNextNumber() {
+      socket.emit('call_next')
+    },
+    registerQueue() {
+      const emptyLocketIndex = this.queueNumbers.lokets.findIndex((number) => number === 0)
+      if (emptyLocketIndex !== -1) {
+        const nextQueueNumber = this.queueNumbers.queue ? this.queueNumbers.queue + 1 : 1
+        this.queueNumbers.queue = nextQueueNumber
+        this.queueNumbers.lokets[emptyLocketIndex] = nextQueueNumber
+
+        const queueDataArray = this.queueNumbers.lokets.map((number, index) => ({
+          loket: index + 1,
+          queue: number,
+          status: number === 0 ? 'waiting' : 'serving'
+        }))
+
+        axios
+          .post('http://localhost:3000/update-queue', {
+            updatedQueueData: queueDataArray
+          })
+          .then((response) => {
+            if (response.data.success) {
+            } else {
+              window.alert(response.data.message)
+            }
+          })
+          .catch((error) => {
+            console.error('Error registering queue:', error)
+            window.alert('Terjadi kesalahan saat mengirim data antrian.')
+          })
+      } else {
+        window.alert('Semua loket sedang sibuk.')
+      }
+    },
+
+    speakText(text) {
+      const speech = new SpeechSynthesisUtterance()
+      speech.text = text
+      if (this.speechVoice) {
+        speech.voice = this.speechVoice
+      }
+      window.speechSynthesis.speak(speech)
+    },
+    getIndonesianFemaleVoice() {
+      const voices = window.speechSynthesis.getVoices()
+      const indonesianFemaleVoice = voices.find((voice) => {
+        return voice.lang.includes('id') && voice.name.includes('Wanita')
+      })
+      if (indonesianFemaleVoice) {
+        this.speechVoice = indonesianFemaleVoice
+      } else {
+        console.warn('Tidak dapat menemukan suara bahasa Indonesia perempuan.')
+      }
     }
   }
 }
