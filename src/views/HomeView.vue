@@ -28,10 +28,10 @@
 
     <div class="container">
       <div class="grid-container">
-        <div class="card" v-for="(number, index) in queueNumbers.lokets" :key="index">
+        <div class="card" v-for="(loket, index) in queueNumbers.lokets" :key="index">
           <h1 class="title-list">Loket {{ index + 1 }}</h1>
           <div class="card-body">
-            <div class="number-antrian">{{ number }}</div>
+            <div class="number-antrian">{{ loket.number }}</div>
           </div>
         </div>
       </div>
@@ -46,88 +46,45 @@
 </template>
 
 <script>
-import socket from '@/lib/socket'
-import axios from 'axios'
+import io from 'socket.io-client'
 
 export default {
   data() {
     return {
       queueNumbers: {
         queue: 0,
-        lokets: [0, 0, 0]
+        lokets: []
       },
-      youtubeUrl: 'https://www.youtube.com/embed/RZb2_hxl-Cs?si=UGyBKvdehMOEzNa5&amp;start=6',
-      speechVoice: null
+      socket: null
     }
   },
-  mounted() {
-    socket.on('queue_update', (data) => {
-      this.queueNumbers[data.loket] = data.queueNumber
-    })
-
-    socket.on('loket_empty', (data) => {
-      this.queueNumbers[data.loket] = null
-    })
-
-    window.speechSynthesis.onvoiceschanged = () => {
-      this.getIndonesianFemaleVoice()
+  computed: {
+    youtubeUrl() {
+      return 'https://www.youtube.com/embed/RZb2_hxl-Cs?si=UGyBKvdehMOEzNa5&amp;start=6'
     }
   },
   methods: {
-    callNextNumber() {
-      socket.emit('call_next')
-    },
     registerQueue() {
-      const emptyLocketIndex = this.queueNumbers.lokets.findIndex((number) => number === 0)
-      if (emptyLocketIndex !== -1) {
-        const nextQueueNumber = this.queueNumbers.queue ? this.queueNumbers.queue + 1 : 1
-        this.queueNumbers.queue = nextQueueNumber
-        this.queueNumbers.lokets[emptyLocketIndex] = nextQueueNumber
-
-        const queueDataArray = this.queueNumbers.lokets.map((number, index) => ({
-          loket: index + 1,
-          queue: number,
-          status: number === 0 ? 'waiting' : 'serving'
-        }))
-
-        axios
-          .post('http://localhost:3000/update-queue', {
-            updatedQueueData: queueDataArray
-          })
-          .then((response) => {
-            if (response.data.success) {
-            } else {
-              window.alert(response.data.message)
-            }
-          })
-          .catch((error) => {
-            console.error('Error registering queue:', error)
-            window.alert('Terjadi kesalahan saat mengirim data antrian.')
-          })
+      const availableLoketIndex = this.queueNumbers.lokets.findIndex(
+        (loket) => loket.status === 'Menunggu'
+      )
+      if (availableLoketIndex !== -1) {
+        // Mengirim event 'registerQueue' ke server
+        this.socket.emit('registerQueue')
       } else {
-        window.alert('Semua loket sedang sibuk.')
-      }
-    },
-
-    speakText(text) {
-      const speech = new SpeechSynthesisUtterance()
-      speech.text = text
-      if (this.speechVoice) {
-        speech.voice = this.speechVoice
-      }
-      window.speechSynthesis.speak(speech)
-    },
-    getIndonesianFemaleVoice() {
-      const voices = window.speechSynthesis.getVoices()
-      const indonesianFemaleVoice = voices.find((voice) => {
-        return voice.lang.includes('id') && voice.name.includes('Wanita')
-      })
-      if (indonesianFemaleVoice) {
-        this.speechVoice = indonesianFemaleVoice
-      } else {
-        console.warn('Tidak dapat menemukan suara bahasa Indonesia perempuan.')
+        console.log('Semua loket sedang dilayani. Tunggu sebentar.')
       }
     }
+  },
+  mounted() {
+    this.socket = io('http://localhost:3000')
+
+    this.socket.on('queueUpdated', (queueNumbers) => {
+      this.queueNumbers = queueNumbers
+    })
+  },
+  beforeDestroy() {
+    this.socket.disconnect()
   }
 }
 </script>

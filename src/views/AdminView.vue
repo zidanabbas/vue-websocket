@@ -60,7 +60,7 @@
 
 <script>
 import axios from 'axios'
-import socket from '@/lib/socket'
+import io from 'socket.io-client'
 
 export default {
   data() {
@@ -69,6 +69,8 @@ export default {
     }
   },
   mounted() {
+    this.socket = io('http://localhost:3000')
+
     this.fetchQueues()
 
     socket.on('queue_update', ({ queueNumber, newStatus }) => {
